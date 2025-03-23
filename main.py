@@ -47,5 +47,13 @@ async def on_ready():
     print(f"Logged in as {client.user}")
     check_for_new_posts.start()
 
+@client.event
+async def on_message(message):
+    if message.author == client.user:
+        return  # Ignore bot's own messages
+
+    if message.content.lower() == "k!test":
+        await message.channel.send("✅ Test successful! Bot is working.")
+
 # Run the bot
 client.run(DISCORD_BOT_TOKEN)
