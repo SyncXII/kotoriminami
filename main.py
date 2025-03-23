@@ -35,4 +35,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # Track already notified posts
 notified_posts = set()
 
-@tasks.loop(seconds=random.randint(5, 15))  # Random delay between
+import random
+
+delay = random.randint(5, 15)  # Generate a random delay once
+@tasks.loop(seconds=delay)
