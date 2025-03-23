@@ -49,11 +49,12 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    print(f"Received message: {message.content}")  # Debugging
     if message.author == client.user:
         return  # Ignore bot's own messages
 
-    if message.content.lower() == "k!test":
-        await message.channel.send("✅ Test successful! Bot is working.")
+    if message.content.lower() == "!test":
+        await message.channel.send(f"✅ Test successful! {message.author.mention}")
 
 # Run the bot
 client.run(DISCORD_BOT_TOKEN)
