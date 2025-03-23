@@ -37,7 +37,7 @@ async def check_for_new_posts():
                 link = "https://phcorner.org" + post.find("a")["href"]  # Get full link to the post
 
                 if link not in notified_posts:
-                    channel = client.get_channel(DISCORD_CHANNEL_ID)
+                    channel = bot.get_channel(DISCORD_CHANNEL_ID)
                     await channel.send(f"📢 **New Post by {USERNAME}**:\n🔗 **{title}**\n➡️ {link}")
                     notified_posts.add(link)
 
@@ -46,8 +46,8 @@ async def check_for_new_posts():
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {client.user}")
-    channel = client.get_channel(DISCORD_CHANNEL_ID)
+    print(f"Logged in as {bot.user}")
+    channel = bot.get_channel(DISCORD_CHANNEL_ID)
     await channel.send("✅ Bot is online and can send messages!")  # Test message
     check_for_new_posts.start()
 
