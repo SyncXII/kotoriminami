@@ -1,7 +1,6 @@
 import os
 import discord
 import random
-import asyncio
 import requests
 from bs4 import BeautifulSoup
 from discord.ext import commands, tasks
@@ -14,14 +13,13 @@ MENTION_ID = int(os.getenv("DISCORD_USER_ID"))
 
 # Set up bot
 intents = discord.Intents.default()
-intents.messages = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree  # Slash commands handler
 
 # Forum URL
 FORUM_URL = "https://phcorner.org/forums/freemium-access.261/"
 
-# ✅ Updated Cookies for Authentication
+# ✅ Cookies for Authentication
 COOKIES = {
     "xf_csrf": "wRCpzH43hGS1IVmx",
     "xf_session": "uL4RdjjEq6uHOK85uvt0dLphjSUlgzop",
@@ -34,7 +32,7 @@ HEADERS = {
     "Referer": "https://phcorner.org/"
 }
 
-# Store last seen thread
+# ✅ Store last seen thread
 last_seen_thread = None
 
 
@@ -42,6 +40,7 @@ last_seen_thread = None
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
+    
     try:
         synced = await bot.tree.sync()
         print(f"✅ Synced {len(synced)} slash commands")
@@ -51,9 +50,12 @@ async def on_ready():
     channel = bot.get_channel(CHANNEL_ID)
     if channel:
         await channel.send(f"✅ Bot started! <@{MENTION_ID}>")
+    
+    if not check_for_new_threads.is_running():
+        check_for_new_threads.start()
 
 
-# ✅ Scrape only the **latest** thread posted by kotoriminami
+# ✅ Scrape the latest thread by kotoriminami
 def get_latest_kotoriminami_thread():
     try:
         session = requests.Session()
@@ -79,7 +81,7 @@ def get_latest_kotoriminami_thread():
         return None
 
 
-# ✅ Task to check for new threads every 5 seconds
+# ✅ Check for new threads every 5 seconds
 @tasks.loop(seconds=5)
 async def check_for_new_threads():
     global last_seen_thread
@@ -95,4 +97,16 @@ async def check_for_new_threads():
             await channel.send(f"📢 **New thread by kotoriminami!**\n**{latest_thread['title']}**\n🔗 {latest_thread['link']}\n<@{MENTION_ID}>")
 
 
-# ✅ Start
+# ✅ Slash command: /scrapetest (Fetch a random thread)
+@tree.command(name="scrapetest", description="Fetch a random thread")
+async def scrapetest(interaction: discord.Interaction):
+    latest_thread = get_latest_kotoriminami_thread()
+
+    if latest_thread:
+        await interaction.response.send_message(f"🎲 **Latest Thread by kotoriminami:**\n**{latest_thread['title']}**\n🔗 {latest_thread['link']}")
+    else:
+        await interaction.response.send_message("⚠️ No threads found from kotoriminami.")
+
+
+# ✅ Run bot
+bot.run(TOKEN)
