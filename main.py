@@ -117,4 +117,20 @@ async def check_for_new_threads():
         last_seen_thread = latest_thread
         channel = bot.get_channel(CHANNEL_ID)
         if channel:
-            await channel.send(f"📢 **New thread by kotoriminami!**\n**{latest_thread['title']}**\n🔗 {
+            await channel.send(f"📢 **New thread by kotoriminami!**\n**{latest_thread['title']}**\n🔗 {latest_thread['link']}\n<@{MENTION_ID}>")
+
+
+# ✅ Slash command: /scrapetest (Fetch a random thread)
+@tree.command(name="scrapetest", description="Fetch a random thread")
+async def scrapetest(interaction: discord.Interaction):
+    threads = scrape_all_threads()
+
+    if threads:
+        thread = random.choice(threads)
+        await interaction.response.send_message(f"🎲 **Random Thread:**\n**{thread['title']}**\n🔗 {thread['link']}")
+    else:
+        await interaction.response.send_message("⚠️ No threads found.")
+
+
+# ✅ Run bot
+bot.run(TOKEN)
