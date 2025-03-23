@@ -14,6 +14,8 @@ USERNAME = "kotoriminami"
 
 # Set up Discord client
 intents = discord.Intents.default()
+intents.messages = True  # Allow message reading
+intents.message_content = True  # Required for commands like !test
 from discord.ext import commands
 
 bot = commands.Bot(command_prefix="!", intents=intents)
