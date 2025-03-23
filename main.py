@@ -14,7 +14,9 @@ USERNAME = "kotoriminami"
 
 # Set up Discord client
 intents = discord.Intents.default()
-client = discord.Client(intents=intents)
+from discord.ext import commands
+
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Track already notified posts
 notified_posts = set()
@@ -42,26 +44,16 @@ async def check_for_new_posts():
     # Change the loop delay dynamically
     check_for_new_posts.change_interval(seconds=random.randint(5, 15))
 
-@client.event
+@bot.event
 async def on_ready():
     print(f"Logged in as {client.user}")
     channel = client.get_channel(DISCORD_CHANNEL_ID)
     await channel.send("✅ Bot is online and can send messages!")  # Test message
     check_for_new_posts.start()
 
-@client.event
-async def on_message(message):
-    print(f"Received message: {message.content}")  # Debugging
-
-    if message.author == client.user:
-        print("Ignoring bot's own message.")
-        return  # Ignore bot's own messages
-
-    if message.content.lower() == "!test":
-        print("Test command detected. Sending response...")
-        await message.channel.send(f"✅ Test successful! {message.author.mention}")
-
-    await client.process_commands(message)  # Allow command processing
+@bot.command()
+async def test(ctx):
+    await ctx.send(f"✅ Test successful! {ctx.author.mention}")
     
 # Run the bot
-client.run(DISCORD_BOT_TOKEN)
+bot.run(DISCORD_BOT_TOKEN)
