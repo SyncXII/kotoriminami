@@ -1,7 +1,6 @@
 import os
 import random
 import discord
-import asyncio
 import aiohttp
 from discord.ext import commands, tasks
 from bs4 import BeautifulSoup
@@ -95,11 +94,18 @@ async def scrapetest(ctx):
                 thread_title = title_tag.text.strip()
                 thread_link = "https://phcorner.org" + title_tag["href"]
                 await ctx.send(f"🎲 **Random Thread:**\n{thread_title}\n🔗 {thread_link}")
+            else:
+                await ctx.send("Couldn't extract thread details.")
 
 @bot.event
 async def on_ready():
     """Starts the thread-checking loop when the bot is ready."""
     print(f"Logged in as {bot.user}")
     check_for_new_threads.start()
+    
+    # Notify in the channel that the bot is online
+    channel = bot.get_channel(CHANNEL_ID)
+    if channel:
+        await channel.send(f"✅ **Bot is online and monitoring threads!**\n<@{MENTION_ID}>")
 
 bot.run(TOKEN)
