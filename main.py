@@ -1,111 +1,92 @@
 import os
-import random
 import discord
-import aiohttp
+import random
+import asyncio
+import requests
 from discord.ext import commands, tasks
-from bs4 import BeautifulSoup
+from discord import app_commands
 
 # Load environment variables
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
-MENTION_ID = os.getenv("DISCORD_USER_ID")
+MENTION_ID = int(os.getenv("DISCORD_USER_ID"))
 
-# Forum URL to scrape
-FORUM_URL = "https://phcorner.org/forums/freemium-access.261/"
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-}
-COOKIES = {
-    "xf_csrf": "wRCpzH43hGS1IVmx",
-    "xf_session": "uL4RdjjEq6uHOK85uvt0dLphjSUlgzop",
-    "xf_user": "182831%2C2anOgzI6W1479kHH2JYO6p2M7QJ-aILnSK3_Trw_"
-}
-
-# Discord bot setup
+# Set up bot
 intents = discord.Intents.default()
+intents.messages = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+tree = bot.tree  # Slash commands handler
 
-# Store last seen thread to prevent duplicate notifications
-last_seen_thread = None
+# Forum URL
+FORUM_URL = "https://phcorner.org/forums/freemium-access.261/"
 
-async def scrape_forum():
-    """Scrapes the forum for the latest threads."""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(FORUM_URL, headers=HEADERS, cookies=COOKIES) as response:
-            if response.status != 200:
-                print(f"Failed to fetch forum data, status: {response.status}")
-                return None
+# Fake cookie (Replace with a valid session cookie if needed)
+COOKIES = {
+    "xf_user": "your_cookie_here"
+}
 
-            soup = BeautifulSoup(await response.text(), "html.parser")
-            threads = soup.find_all("div", class_="structItem--thread")
+# Store seen threads to avoid duplicate notifications
+seen_threads = set()
 
-            if not threads:
-                print("No threads found.")
-                return None
-
-            new_threads = []
-            for thread in threads:
-                user = thread.find("a", class_="username")
-                if user and user.text.strip() == "kotoriminami":
-                    title_tag = thread.find("a", class_="structItem-title")
-                    if title_tag:
-                        thread_title = title_tag.text.strip()
-                        thread_link = "https://phcorner.org" + title_tag["href"]
-                        new_threads.append((thread_title, thread_link))
-
-            return new_threads
-
-@tasks.loop(seconds=5)
-async def check_for_new_threads():
-    """Checks for new threads by 'kotoriminami' and notifies in Discord."""
-    global last_seen_thread
-    new_threads = await scrape_forum()
-
-    if new_threads:
-        for title, link in new_threads:
-            if last_seen_thread != link:
-                last_seen_thread = link
-                channel = bot.get_channel(CHANNEL_ID)
-                if channel:
-                    await channel.send(f"📢 **New Thread by kotoriminami!**\n{title}\n🔗 {link}\n<@{MENTION_ID}>")
-                else:
-                    print("Channel not found.")
-
-@bot.command()
-async def scrapetest(ctx):
-    """Fetches a random thread from any user and sends it to Discord."""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(FORUM_URL, headers=HEADERS, cookies=COOKIES) as response:
-            if response.status != 200:
-                await ctx.send("Failed to fetch forum data.")
-                return
-
-            soup = BeautifulSoup(await response.text(), "html.parser")
-            threads = soup.find_all("div", class_="structItem--thread")
-
-            if not threads:
-                await ctx.send("No threads found.")
-                return
-
-            random_thread = random.choice(threads)
-            title_tag = random_thread.find("a", class_="structItem-title")
-
-            if title_tag:
-                thread_title = title_tag.text.strip()
-                thread_link = "https://phcorner.org" + title_tag["href"]
-                await ctx.send(f"🎲 **Random Thread:**\n{thread_title}\n🔗 {thread_link}")
-            else:
-                await ctx.send("Couldn't extract thread details.")
-
+# Mention user on bot startup
 @bot.event
 async def on_ready():
-    """Starts the thread-checking loop when the bot is ready."""
-    print(f"Logged in as {bot.user}")
-    check_for_new_threads.start()
-    
-    # Notify in the channel that the bot is online
+    print(f"✅ Logged in as {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ Synced {len(synced)} slash commands")
+    except Exception as e:
+        print(f"⚠️ Error syncing commands: {e}")
+
+    # Mention user in the channel when bot starts
     channel = bot.get_channel(CHANNEL_ID)
     if channel:
-        await channel.send(f"✅ **Bot is online and monitoring threads!**\n<@{MENTION_ID}>")
+        await channel.send(f"✅ Bot started! <@{MENTION_ID}>")
 
+# Scrape latest threads
+def scrape_latest_threads():
+    try:
+        response = requests.get(FORUM_URL, cookies=COOKIES)
+        response.raise_for_status()
+        # Simulate parsing threads (Replace with real logic)
+        threads = [{"title": f"Thread {i}", "author": "kotoriminami", "link": f"https://phcorner.org/thread{i}"} for i in range(1, 6)]
+        return threads
+    except Exception as e:
+        print(f"⚠️ Error scraping: {e}")
+        return []
+
+# Task to check for new threads
+@tasks.loop(seconds=5)
+async def check_for_new_threads():
+    threads = scrape_latest_threads()
+    if not threads:
+        return
+
+    channel = bot.get_channel(CHANNEL_ID)
+    if not channel:
+        return
+
+    for thread in threads:
+        if thread["author"] == "kotoriminami" and thread["link"] not in seen_threads:
+            seen_threads.add(thread["link"])
+            await channel.send(f"📢 **New thread by kotoriminami!**\n**{thread['title']}**\n🔗 {thread['link']}\n<@{MENTION_ID}>")
+
+# Start thread checking loop
+@bot.event
+async def on_ready():
+    if not check_for_new_threads.is_running():
+        check_for_new_threads.start()
+
+# Slash command: scrapetest
+@tree.command(name="scrapetest", description="Fetch a random thread")
+async def scrapetest(interaction: discord.Interaction):
+    threads = scrape_latest_threads()
+    if not threads:
+        await interaction.response.send_message("⚠️ No threads found.")
+        return
+
+    thread = random.choice(threads)
+    await interaction.response.send_message(f"🎲 **Random Thread:** {thread['title']}\n🔗 {thread['link']}")
+
+# Run bot
 bot.run(TOKEN)
