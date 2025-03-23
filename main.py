@@ -55,7 +55,30 @@ async def on_ready():
         check_for_new_threads.start()
 
 
-# ✅ Scrape the latest thread by kotoriminami
+# ✅ Scrape all threads (for scrapetest)
+def scrape_all_threads():
+    try:
+        session = requests.Session()
+        session.headers.update(HEADERS)
+        response = session.get(FORUM_URL, cookies=COOKIES)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        threads = soup.select(".structItem-title a")
+
+        thread_list = []
+        for thread in threads:
+            title = thread.get_text(strip=True)
+            link = "https://phcorner.org" + thread["href"]
+            thread_list.append({"title": title, "link": link})
+
+        return thread_list
+    except Exception as e:
+        print(f"⚠️ Error scraping threads: {e}")
+        return []
+
+
+# ✅ Get the latest thread by kotoriminami
 def get_latest_kotoriminami_thread():
     try:
         session = requests.Session()
@@ -94,19 +117,4 @@ async def check_for_new_threads():
         last_seen_thread = latest_thread
         channel = bot.get_channel(CHANNEL_ID)
         if channel:
-            await channel.send(f"📢 **New thread by kotoriminami!**\n**{latest_thread['title']}**\n🔗 {latest_thread['link']}\n<@{MENTION_ID}>")
-
-
-# ✅ Slash command: /scrapetest (Fetch a random thread)
-@tree.command(name="scrapetest", description="Fetch a random thread")
-async def scrapetest(interaction: discord.Interaction):
-    latest_thread = get_latest_kotoriminami_thread()
-
-    if latest_thread:
-        await interaction.response.send_message(f"🎲 **Latest Thread by kotoriminami:**\n**{latest_thread['title']}**\n🔗 {latest_thread['link']}")
-    else:
-        await interaction.response.send_message("⚠️ No threads found from kotoriminami.")
-
-
-# ✅ Run bot
-bot.run(TOKEN)
+            await channel.send(f"📢 **New thread by kotoriminami!**\n**{latest_thread['title']}**\n🔗 {
