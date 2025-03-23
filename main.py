@@ -52,11 +52,16 @@ async def on_ready():
 @client.event
 async def on_message(message):
     print(f"Received message: {message.content}")  # Debugging
+
     if message.author == client.user:
+        print("Ignoring bot's own message.")
         return  # Ignore bot's own messages
 
     if message.content.lower() == "!test":
+        print("Test command detected. Sending response...")
         await message.channel.send(f"✅ Test successful! {message.author.mention}")
 
+    await client.process_commands(message)  # Allow command processing
+    
 # Run the bot
 client.run(DISCORD_BOT_TOKEN)
