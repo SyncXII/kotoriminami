@@ -6,27 +6,27 @@ from bs4 import BeautifulSoup
 from discord.ext import commands, tasks
 from discord import app_commands
 
-# Load environment variables
+# ✅ Load environment variables
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
 MENTION_ID = int(os.getenv("DISCORD_USER_ID"))
 
-# Set up bot
+# ✅ Set up bot
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree  # Slash commands handler
 
-# Forum URL
+# ✅ Forum URL
 FORUM_URL = "https://phcorner.org/forums/freemium-access.261/"
 
-# ✅ Cookies for Authentication
+# ✅ Cookies for Authentication (Replace with valid cookies)
 COOKIES = {
     "xf_csrf": "wRCpzH43hGS1IVmx",
     "xf_session": "uL4RdjjEq6uHOK85uvt0dLphjSUlgzop",
     "xf_user": "182831%2C2anOgzI6W1479kHH2JYO6p2M7QJ-aILnSK3_Trw_"
 }
 
-# Headers to prevent bot detection
+# ✅ Headers to mimic a real browser
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
     "Referer": "https://phcorner.org/"
@@ -55,7 +55,7 @@ async def on_ready():
         check_for_new_threads.start()
 
 
-# ✅ Scrape all threads (for scrapetest)
+# ✅ Scrape all threads (for /scrapetest)
 def scrape_all_threads():
     try:
         session = requests.Session()
@@ -87,16 +87,19 @@ def get_latest_kotoriminami_thread():
         response.raise_for_status()
 
         soup = BeautifulSoup(response.text, "html.parser")
-        threads = soup.select(".structItem-title a")
+        threads = soup.select(".structItem")
 
         for thread in threads:
-            title = thread.get_text(strip=True)
-            link = "https://phcorner.org" + thread["href"]
+            title_element = thread.select_one(".structItem-title a")
+            author_element = thread.select_one(".username")
 
-            # Check if author is "kotoriminami"
-            author_element = thread.find_parent("div", class_="structItem").select_one(".username")
-            if author_element and author_element.get_text(strip=True).lower() == "kotoriminami":
-                return {"title": title, "author": "kotoriminami", "link": link}
+            if title_element and author_element:
+                title = title_element.get_text(strip=True)
+                link = "https://phcorner.org" + title_element["href"]
+                author = author_element.get_text(strip=True).lower()
+
+                if author == "kotoriminami":
+                    return {"title": title, "author": "kotoriminami", "link": link}
 
         return None  # No thread found
     except Exception as e:
@@ -123,13 +126,16 @@ async def check_for_new_threads():
 # ✅ Slash command: /scrapetest (Fetch a random thread)
 @tree.command(name="scrapetest", description="Fetch a random thread")
 async def scrapetest(interaction: discord.Interaction):
-    threads = scrape_all_threads()
+    await interaction.response.defer()  # Prevent timeout issues
 
-    if threads:
-        thread = random.choice(threads)
-        await interaction.response.send_message(f"🎲 **Random Thread:**\n**{thread['title']}**\n🔗 {thread['link']}")
-    else:
-        await interaction.response.send_message("⚠️ No threads found.")
+    threads = scrape_all_threads()
+    
+    if not threads:
+        await interaction.followup.send("⚠️ No threads found.")
+        return
+    
+    thread = random.choice(threads)
+    await interaction.followup.send(f"🎲 **Random Thread:**\n**{thread['title']}**\n🔗 {thread['link']}")
 
 
 # ✅ Run bot
