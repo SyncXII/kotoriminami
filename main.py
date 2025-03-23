@@ -34,13 +34,7 @@ HEADERS = {
 }
 
 # 🔹 Store last seen threads to avoid duplicate notifications
-seen_threads = {
-    "https://phcorner.org/threads/10pcs-netflix-ph-premium-autopay.2251640/",
-    "https://phcorner.org/threads/netflix-ph.2250055/",
-    "https://phcorner.org/threads/netflix-ph.2250052/",
-    "https://phcorner.org/threads/netflix-ph-only-1.2250048/",
-    "https://phcorner.org/threads/netflix-ph-ratrat.2249979/"
-}
+seen_threads = set()
 
 
 # ✅ Bot startup event
@@ -65,58 +59,8 @@ async def on_ready():
         check_for_new_threads.start()
 
 
-# ✅ Scrape all threads (For `/scrapetest`)
-def scrape_all_threads():
-    try:
-        session = requests.Session()
-        session.headers.update(HEADERS)
-        response = session.get(FORUM_URL, cookies=COOKIES)
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, "html.parser")
-        threads = soup.select(".structItem-title a")
-
-        thread_list = []
-        for thread in threads:
-            title = thread.get_text(strip=True)
-            link = "https://phcorner.org" + thread["href"]
-            thread_list.append({"title": title, "link": link})
-
-        return thread_list
-    except Exception as e:
-        print(f"⚠️ Error scraping threads: {e}")
-        return []
-
-
-# ✅ Get the latest thread by `kotoriminami`
-def get_latest_kotoriminami_thread():
-    try:
-        session = requests.Session()
-        session.headers.update(HEADERS)
-        response = session.get(FORUM_URL, cookies=COOKIES)
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, "html.parser")
-        threads = soup.select(".structItem-title a")
-
-        for thread in threads:
-            title = thread.get_text(strip=True)
-            link = "https://phcorner.org" + thread["href"]
-
-            # Check if author is "kotoriminami"
-            author_element = thread.find_parent("div", class_="structItem").select_one(".username")
-            if author_element and author_element.get_text(strip=True).lower() == "kotoriminami":
-                if link not in seen_threads:
-                    return {"title": title, "author": "kotoriminami", "link": link}
-
-        return None  # No new thread found
-    except Exception as e:
-        print(f"⚠️ Error scraping: {e}")
-        return None
-
-
-# ✅ Fetch last 5 threads by `kotoriminami`
-def fetch_last_5_threads():
+# ✅ Fetch latest 5 threads by `kotoriminami`
+def fetch_latest_threads():
     try:
         session = requests.Session()
         session.headers.update(HEADERS)
@@ -124,13 +68,15 @@ def fetch_last_5_threads():
         response.raise_for_status()
 
         soup = BeautifulSoup(response.text, "html.parser")
-        threads = soup.select(".structItem-title a")[:5]  # Get the 5 latest threads
+        threads = soup.select(".structItem")[:5]  # Get latest 5 thread elements
 
         thread_list = []
         for thread in threads:
-            title = thread.get_text(strip=True)
-            link = "https://phcorner.org" + thread["href"]
-            thread_list.append(f"🔹 **{title}**\n🔗 {link}")
+            title_element = thread.select_one(".structItem-title a")
+            if title_element:
+                title = title_element.get_text(strip=True)
+                link = "https://phcorner.org" + title_element["href"]
+                thread_list.append(f"🔹 **{title}**\n🔗 {link}")
 
         return "\n\n".join(thread_list) if thread_list else "⚠️ No recent threads found."
     except Exception as e:
@@ -141,33 +87,24 @@ def fetch_last_5_threads():
 # ✅ Check for new threads every 5 seconds
 @tasks.loop(seconds=5)
 async def check_for_new_threads():
-    latest_thread = get_latest_kotoriminami_thread()
-    if not latest_thread:
+    latest_threads = fetch_latest_threads()
+    if not latest_threads:
         return
 
-    if latest_thread["link"] not in seen_threads:
-        seen_threads.add(latest_thread["link"])
+    latest_thread = latest_threads.split("\n\n")[0]  # Get the first/latest thread
+    thread_link = latest_thread.split("\n")[1].replace("🔗 ", "").strip()
+
+    if thread_link not in seen_threads:
+        seen_threads.add(thread_link)
         channel = bot.get_channel(CHANNEL_ID)
         if channel:
-            await channel.send(f"📢 **New thread by kotoriminami!**\n**{latest_thread['title']}**\n🔗 {latest_thread['link']}\n<@{MENTION_ID}>")
-
-
-# ✅ Slash command: `/scrapetest` (Fetch a random thread)
-@tree.command(name="scrapetest", description="Fetch a random thread")
-async def scrapetest(interaction: discord.Interaction):
-    threads = scrape_all_threads()
-
-    if threads:
-        thread = random.choice(threads)
-        await interaction.response.send_message(f"🎲 **Random Thread:**\n**{thread['title']}**\n🔗 {thread['link']}")
-    else:
-        await interaction.response.send_message("⚠️ No threads found.")
+            await channel.send(f"📢 **New thread by kotoriminami!**\n{latest_thread}\n<@{MENTION_ID}>")
 
 
 # ✅ Slash command: `/fetch` (Fetch last 5 threads by `kotoriminami`)
 @tree.command(name="fetch", description="Fetch the 5 latest threads by kotoriminami")
 async def fetch(interaction: discord.Interaction):
-    latest_threads = fetch_last_5_threads()
+    latest_threads = fetch_latest_threads()
     await interaction.response.send_message(f"📜 **Latest 5 Threads by Kotoriminami:**\n\n{latest_threads}")
 
 
