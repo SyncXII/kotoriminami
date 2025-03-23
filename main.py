@@ -45,6 +45,8 @@ async def check_for_new_posts():
 @client.event
 async def on_ready():
     print(f"Logged in as {client.user}")
+    channel = client.get_channel(DISCORD_CHANNEL_ID)
+    await channel.send("✅ Bot is online and can send messages!")  # Test message
     check_for_new_posts.start()
 
 @client.event
