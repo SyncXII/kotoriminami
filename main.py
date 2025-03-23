@@ -11,15 +11,16 @@ TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
 MENTION_ID = int(os.getenv("DISCORD_USER_ID"))
 
-# 🔹 Set up bot with commands and intents
+# 🔹 Set up bot with intents
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree  # Slash commands handler
 
-# 🔹 Forum URL (Change if needed)
+# 🔹 URLs
 FORUM_URL = "https://phcorner.org/forums/freemium-access.261/"
+SEARCH_URL = "https://phcorner.org/search/member?user_id=2564330&content=thread"  # Fetch threads from user
 
-# 🔹 Cookies for Authentication (Ensure they're valid)
+# 🔹 Cookies for Authentication
 COOKIES = {
     "xf_csrf": "wRCpzH43hGS1IVmx",
     "xf_session": "uL4RdjjEq6uHOK85uvt0dLphjSUlgzop",
@@ -64,7 +65,7 @@ async def on_ready():
         check_for_new_threads.start()
 
 
-# ✅ Scrape all threads (For `/scrapetest` and `!scrapetest`)
+# ✅ Scrape all threads (For `/scrapetest`)
 def scrape_all_threads():
     try:
         session = requests.Session()
@@ -114,6 +115,29 @@ def get_latest_kotoriminami_thread():
         return None
 
 
+# ✅ Fetch last 5 threads by `kotoriminami`
+def fetch_last_5_threads():
+    try:
+        session = requests.Session()
+        session.headers.update(HEADERS)
+        response = session.get(SEARCH_URL, cookies=COOKIES)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        threads = soup.select(".structItem-title a")[:5]  # Get the 5 latest threads
+
+        thread_list = []
+        for thread in threads:
+            title = thread.get_text(strip=True)
+            link = "https://phcorner.org" + thread["href"]
+            thread_list.append(f"🔹 **{title}**\n🔗 {link}")
+
+        return "\n\n".join(thread_list) if thread_list else "⚠️ No recent threads found."
+    except Exception as e:
+        print(f"⚠️ Error fetching threads: {e}")
+        return "⚠️ Error fetching latest threads."
+
+
 # ✅ Check for new threads every 5 seconds
 @tasks.loop(seconds=5)
 async def check_for_new_threads():
@@ -140,23 +164,18 @@ async def scrapetest(interaction: discord.Interaction):
         await interaction.response.send_message("⚠️ No threads found.")
 
 
-# ✅ Prefix command: `!scrapetest` (For testing if slash command fails)
-@bot.command()
-async def scrapetest(ctx):
-    threads = scrape_all_threads()
-
-    if threads:
-        thread = random.choice(threads)
-        await ctx.send(f"🎲 **Random Thread:**\n**{thread['title']}**\n🔗 {thread['link']}")
-    else:
-        await ctx.send("⚠️ No threads found.")
+# ✅ Slash command: `/fetch` (Fetch last 5 threads by `kotoriminami`)
+@tree.command(name="fetch", description="Fetch the 5 latest threads by kotoriminami")
+async def fetch(interaction: discord.Interaction):
+    latest_threads = fetch_last_5_threads()
+    await interaction.response.send_message(f"📜 **Latest 5 Threads by Kotoriminami:**\n\n{latest_threads}")
 
 
-# ✅ Prefix command: `!ping` (Check if bot is online)
-@bot.command()
-async def test(ctx):
+# ✅ Slash command: `/ping` (Check if bot is online)
+@tree.command(name="ping", description="Check if the bot is online and responsive")
+async def ping(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)  # Convert to ms
-    await ctx.send(f"🏓 Pong! Bot is online. Latency: `{latency}ms`")
+    await interaction.response.send_message(f"🏓 Pong! Bot is online. Latency: `{latency}ms`")
 
 
 # ✅ Run the bot
