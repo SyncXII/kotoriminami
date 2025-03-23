@@ -154,7 +154,7 @@ async def scrapetest(ctx):
 
 # ✅ Prefix command: `!ping` (Check if bot is online)
 @bot.command()
-async def ping(ctx):
+async def test(ctx):
     latency = round(bot.latency * 1000)  # Convert to ms
     await ctx.send(f"🏓 Pong! Bot is online. Latency: `{latency}ms`")
 
