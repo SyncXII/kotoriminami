@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from discord.ext import commands, tasks
 from discord import app_commands
 
-# 🔹 Load environment variables
+# 🔹 Load environment variable
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
 MENTION_ID = int(os.getenv("DISCORD_USER_ID"))
