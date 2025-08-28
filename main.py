@@ -67,7 +67,7 @@ async def on_ready():
         await channel.send(f"✅ Bot started! <@{MENTION_ID}>")
 
     if not check_for_new_threads.is_running():
-       # check_for_new_threads.start()
+        check_for_new_threads.start()
 
 
 # ✅ Scrape all threads (for /scrapetest)
