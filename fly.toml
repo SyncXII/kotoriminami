@@ -1,0 +1,19 @@
+# fly.toml - Configuration for Fly.io deployment
+
+app = "discord-bot"   # 🔹 Replace with your app name after `fly launch`
+
+primary_region = "sin" # 🔹 Change to a region near you (sin = Singapore, lax = Los Angeles, etc.)
+
+[build]
+  # If you have a requirements.txt, Fly will auto-detect Python
+  builder = "paketobuildpacks/builder:base"
+
+[env]
+  PYTHONUNBUFFERED = "1"
+
+[processes]
+  app = "python main.py"  # This tells Fly how to start your bot
+
+[experimental]
+  allowed_public_ports = []
+  auto_rollback = true
