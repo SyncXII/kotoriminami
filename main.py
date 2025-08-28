@@ -1,182 +1,165 @@
 import os
 import discord
 import random
-import requests
-import logging
+import aiohttp
 from bs4 import BeautifulSoup
 from discord.ext import commands, tasks
 from discord import app_commands
-
-# 🔹 Setup Logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("bot.log", encoding="utf-8", mode="a")
-    ]
-)
-logger = logging.getLogger("discord_bot")
 
 # 🔹 Load environment variables
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
 MENTION_ID = int(os.getenv("DISCORD_USER_ID"))
 
-# 🔹 Setup bot
+# 🔹 Set up bot with intents
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
-tree = bot.tree
+tree = bot.tree  # Slash commands handler
 
-# 🔹 URLs & Cookies
+# 🔹 URLs
 FORUM_URL = "https://phcorner.org/forums/freemium-access.261/"
 SEARCH_URL = "https://phcorner.org/search/member?user_id=2564330&content=thread"
+
+# 🔹 Cookies for Authentication
 COOKIES = {
     "xf_csrf": "S33fu4x-uzGaIhEU",
     "xf_session": "v9zviK3SpZIni1jr9cRpZRtcAWWkXTWy",
     "xf_user": "182831%2C4rFuvo33AFvwpIbyClrB-82ez24h5WJBONauWx3X"
 }
+
+# 🔹 Headers
 HEADERS = {
-    "User-Agent": "Mozilla/5.0",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
     "Referer": "https://phcorner.org/"
 }
 
-seen_threads = set()
+# 🔹 Store last seen threads
+seen_threads = {
+    "https://phcorner.org/threads/10pcs-netflix-ph-premium-autopay.2251640/",
+    "https://phcorner.org/threads/netflix-ph.2250055/",
+    "https://phcorner.org/threads/netflix-ph.2250052/",
+    "https://phcorner.org/threads/netflix-ph-only-1.2250048/",
+    "https://phcorner.org/threads/netflix-ph-ratrat.2249979/"
+}
 
-# ✅ Bot ready
+
+# ✅ Async helper: fetch HTML
+async def fetch_html(url):
+    async with aiohttp.ClientSession(cookies=COOKIES, headers=HEADERS) as session:
+        async with session.get(url) as resp:
+            resp.raise_for_status()
+            return await resp.text()
+
+
+# ✅ Bot startup event
 @bot.event
 async def on_ready():
-    logger.info(f"✅ Logged in as {bot.user}")
+    print(f"✅ Logged in as {bot.user}")
+
     try:
         synced = await bot.tree.sync()
-        logger.info(f"✅ Synced {len(synced)} slash commands")
+        print(f"✅ Synced {len(synced)} slash commands")
     except Exception as e:
-        logger.error(f"⚠️ Error syncing commands: {e}")
+        print(f"⚠️ Error syncing commands: {e}")
 
     channel = bot.get_channel(CHANNEL_ID)
     if channel:
         await channel.send(f"✅ Bot started! <@{MENTION_ID}>")
-        logger.info("Startup message sent.")
 
     if not check_for_new_threads.is_running():
         check_for_new_threads.start()
 
-    if not keep_active_ping.is_running():
-        keep_active_ping.start()
 
-
-# ✅ Scraping
-def scrape_all_threads():
+# ✅ Scrape all threads (for /scrapetest)
+async def scrape_all_threads():
     try:
-        session = requests.Session()
-        session.headers.update(HEADERS)
-        res = session.get(FORUM_URL, cookies=COOKIES)
-        res.raise_for_status()
-        soup = BeautifulSoup(res.text, "html.parser")
-        return [{"title": t.get_text(strip=True), "link": "https://phcorner.org" + t["href"]} for t in soup.select(".structItem-title a")]
+        html = await fetch_html(FORUM_URL)
+        soup = BeautifulSoup(html, "html.parser")
+        threads = soup.select(".structItem-title a")
+
+        return [
+            {"title": t.get_text(strip=True), "link": "https://phcorner.org" + t["href"]}
+            for t in threads
+        ]
     except Exception as e:
-        logger.error(f"Scrape error: {e}")
+        print(f"⚠️ Error scraping threads: {e}")
         return []
 
 
-def get_latest_kotoriminami_thread():
+# ✅ Get latest thread by kotoriminami
+async def get_latest_kotoriminami_thread():
     try:
-        session = requests.Session()
-        session.headers.update(HEADERS)
-        res = session.get(FORUM_URL, cookies=COOKIES)
-        res.raise_for_status()
-        soup = BeautifulSoup(res.text, "html.parser")
-        for t in soup.select(".structItem-title a"):
-            title, link = t.get_text(strip=True), "https://phcorner.org" + t["href"]
+        html = await fetch_html(FORUM_URL)
+        soup = BeautifulSoup(html, "html.parser")
+        threads = soup.select(".structItem-title a")
+
+        for t in threads:
+            title = t.get_text(strip=True)
+            link = "https://phcorner.org" + t["href"]
             author = t.find_parent("div", class_="structItem").select_one(".username")
             if author and author.get_text(strip=True).lower() == "kotoriminami":
                 if link not in seen_threads:
-                    return {"title": title, "link": link}
+                    return {"title": title, "author": "kotoriminami", "link": link}
         return None
     except Exception as e:
-        logger.error(f"Thread fetch error: {e}")
+        print(f"⚠️ Error scraping: {e}")
         return None
 
 
-def fetch_last_5_threads():
+# ✅ Fetch last 5 threads by kotoriminami
+async def fetch_last_5_threads():
     try:
-        session = requests.Session()
-        session.headers.update(HEADERS)
-        res = session.get(SEARCH_URL, cookies=COOKIES)
-        res.raise_for_status()
-        soup = BeautifulSoup(res.text, "html.parser")
-        return "\n\n".join([f"🔹 **{t.get_text(strip=True)}**\n🔗 https://phcorner.org{t['href']}" for t in soup.select(".structItem-title a")[:5]])
+        html = await fetch_html(SEARCH_URL)
+        soup = BeautifulSoup(html, "html.parser")
+        threads = soup.select(".structItem-title a")[:5]
+
+        return "\n\n".join(
+            [f"🔹 **{t.get_text(strip=True)}**\n🔗 https://phcorner.org{t['href']}" for t in threads]
+        ) if threads else "⚠️ No recent threads found."
     except Exception as e:
-        logger.error(f"Fetch error: {e}")
-        return "⚠️ Error fetching threads."
+        print(f"⚠️ Error fetching threads: {e}")
+        return "⚠️ Error fetching latest threads."
 
 
-# ✅ Background: check new threads
+# ✅ Loop to check new threads
 @tasks.loop(seconds=5)
 async def check_for_new_threads():
-    t = get_latest_kotoriminami_thread()
-    if t and t["link"] not in seen_threads:
-        seen_threads.add(t["link"])
-        ch = bot.get_channel(CHANNEL_ID)
-        if ch:
-            await ch.send(f"📢 New thread by kotoriminami!\n**{t['title']}**\n🔗 {t['link']}\n<@{MENTION_ID}>")
-            logger.info(f"Posted new thread: {t['title']}")
+    latest_thread = await get_latest_kotoriminami_thread()
+    if not latest_thread:
+        return
+    if latest_thread["link"] not in seen_threads:
+        seen_threads.add(latest_thread["link"])
+        channel = bot.get_channel(CHANNEL_ID)
+        if channel:
+            await channel.send(
+                f"📢 **New thread by kotoriminami!**\n**{latest_thread['title']}**\n🔗 {latest_thread['link']}\n<@{MENTION_ID}>"
+            )
 
 
-# ✅ Background: auto /ping every 20 days
-@tasks.loop(hours=24*20)  # 20 days
-async def keep_active_ping():
-    ch = bot.get_channel(CHANNEL_ID)
-    if ch:
-        await ch.send("🔄 Auto `/ping` triggered to keep Active Developer Badge alive.")
-        latency = round(bot.latency * 1000)
-        await ch.send(f"🏓 Pong! Latency: `{latency}ms`")
-        logger.info("Auto /ping executed.")
-
-
-# ✅ Slash: /scrapetest
+# ✅ Slash commands
 @tree.command(name="scrapetest", description="Fetch a random thread")
 async def scrapetest(interaction: discord.Interaction):
-    logger.info(f"/scrapetest by {interaction.user}")
-    await interaction.response.defer()
-    threads = scrape_all_threads()
+    threads = await scrape_all_threads()
     if threads:
-        t = random.choice(threads)
-        await interaction.followup.send(f"🎲 **Random Thread:**\n**{t['title']}**\n🔗 {t['link']}")
+        thread = random.choice(threads)
+        await interaction.response.send_message(
+            f"🎲 **Random Thread:**\n**{thread['title']}**\n🔗 {thread['link']}"
+        )
     else:
-        await interaction.followup.send("⚠️ No threads found.")
+        await interaction.response.send_message("⚠️ No threads found.")
 
 
-# ✅ Slash: /fetch
-@tree.command(name="fetch", description="Fetch 5 latest threads by kotoriminami")
+@tree.command(name="fetch", description="Fetch the 5 latest threads by kotoriminami")
 async def fetch(interaction: discord.Interaction):
-    logger.info(f"/fetch by {interaction.user}")
-    await interaction.response.defer()
-    await interaction.followup.send(f"📜 **Latest Threads:**\n\n{fetch_last_5_threads()}")
+    latest_threads = await fetch_last_5_threads()
+    await interaction.response.send_message(f"📜 **Latest 5 Threads by Kotoriminami:**\n\n{latest_threads}")
 
 
-# ✅ Slash: /ping
-@tree.command(name="ping", description="Check bot status")
+@tree.command(name="ping", description="Check if bot is online")
 async def ping(interaction: discord.Interaction):
-    logger.info(f"/ping by {interaction.user}")
-    await interaction.response.defer()
     latency = round(bot.latency * 1000)
-    await interaction.followup.send(f"🏓 Pong! Latency: `{latency}ms`")
+    await interaction.response.send_message(f"🏓 Pong! Latency: `{latency}ms`")
 
 
-# ✅ Slash: /logs
-@tree.command(name="logs", description="Show last 15 log lines")
-async def logs(interaction: discord.Interaction):
-    logger.info(f"/logs by {interaction.user}")
-    await interaction.response.defer(ephemeral=True)
-    try:
-        with open("bot.log", "r", encoding="utf-8") as f:
-            lines = f.readlines()[-15:]
-        await interaction.followup.send("📜 **Logs:**\n```" + "".join(lines)[-1900:] + "```", ephemeral=True)
-    except Exception as e:
-        logger.error(f"Log read error: {e}")
-        await interaction.followup.send("⚠️ Could not read logs.", ephemeral=True)
-
-
-# ✅ Run
+# ✅ Run bot
 bot.run(TOKEN)
